@@ -1,9 +1,9 @@
 blueprint:
-  name: Hue Manual Override Detector (Updated)
+  name: Hue Manual Override Detector (Updated w/ user_id Check)
   description: >
     Detects manual changes to a Hue light (brightness, color, etc.) and sets an override flag
     for a configurable timeout to pause other automations. Ignores automation/scene-driven changes
-    and prevents restarting the delay if already active.
+    and Hue API updates. Prevents restarting the delay if already active.
   domain: automation
   input:
     hue_light:
@@ -42,7 +42,7 @@ condition:
           or trigger.to_state.attributes.color_temp != trigger.from_state.attributes.color_temp
           or trigger.to_state.attributes.rgb_color != trigger.from_state.attributes.rgb_color
         )
-        and not trigger.to_state.context.parent_id
+        and trigger.to_state.context.user_id
       }}
 
 action:

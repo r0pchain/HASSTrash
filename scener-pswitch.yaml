@@ -1,0 +1,103 @@
+blueprint:
+  name: Hue All-Day Scene with Manual Override
+  description: >
+    Automate Philips Hue scene changes based on time of day, only if the physical switch and Hue light are ON. 
+    Supports pausing automation when manual control is detected.
+  domain: automation
+  input:
+    physical_switch:
+      name: Physical Switch
+      description: The physical on/off switch controlling power.
+      selector:
+        entity:
+          domain: switch
+    hue_light:
+      name: Hue Light
+      description: The Hue lamp or group to control.
+      selector:
+        entity:
+          domain: light
+    time_blocks:
+      name: Time Blocks
+      description: Map time ranges to Hue scenes.
+      selector:
+        object:
+    override_timeout:
+      name: Override Timeout (minutes)
+      description: How long to pause schedule after manual control.
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 240
+          step: 5
+          unit_of_measurement: minutes
+
+variables:
+  switch_entity: !input physical_switch
+  light_entity: !input hue_light
+  time_blocks: !input time_blocks
+  override_timeout: !input override_timeout
+  override_helper: "input_boolean.override_{{ hue_light.split('.')[-1] }}"
+
+trigger:
+  - platform: time_pattern
+    minutes: "/5"
+  - platform: state
+    entity_id: !input physical_switch
+    to: "on"
+  - platform: state
+    entity_id: !input hue_light
+    to: "on"
+  - platform: state
+    entity_id: !input hue_light
+
+condition:
+  - condition: state
+    entity_id: !input physical_switch
+    state: "on"
+  - condition: state
+    entity_id: !input hue_light
+    state: "on"
+  - condition: state
+    entity_id: "{{ override_helper }}"
+    state: "off"
+
+action:
+  - choose:
+      {% for block in time_blocks %}
+      - conditions:
+          - condition: time
+            after: "{{ block.start }}"
+            before: "{{ block.end }}"
+        sequence:
+          - service: scene.turn_on
+            target:
+              entity_id: "{{ block.scene }}"
+      {% endfor %}
+
+mode: restart
+
+---
+
+# Secondary automation for manual override detection
+automation:
+  - alias: "Detect Manual Override for {{ hue_light }}"
+    trigger:
+      - platform: state
+        entity_id: !input hue_light
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.to_state.attributes.brightness != trigger.from_state.attributes.brightness or
+             trigger.to_state.attributes.color_temp != trigger.from_state.attributes.color_temp or
+             trigger.to_state.attributes.rgb_color != trigger.from_state.attributes.rgb_color }}
+    action:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: "{{ override_helper }}"
+      - delay:
+          minutes: "{{ override_timeout }}"
+      - service: input_boolean.turn_off
+        target:
+          entity_id: "{{ override_helper }}"

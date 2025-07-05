@@ -1,0 +1,69 @@
+blueprint:
+  name: Hue All-Day Scene Refresh with Override
+  description: >
+    Refresh a Philips Hue "All-day scene" periodically and on state changes.
+    Only runs if both the physical switch and Hue light are ON and no manual override is active.
+  domain: automation
+  input:
+    physical_switch:
+      name: Physical Switch
+      description: The physical on/off switch controlling power.
+      selector:
+        entity:
+          domain: switch
+    hue_light:
+      name: Hue Light
+      description: The Hue lamp or group to control.
+      selector:
+        entity:
+          domain: light
+    all_day_scene:
+      name: Hue All-Day Scene
+      description: The Hue "All-day scene" to refresh.
+      selector:
+        entity:
+          domain: scene
+    override_helper:
+      name: Override Helper
+      description: input_boolean helper to suppress scene refresh during manual overrides.
+      selector:
+        entity:
+          domain: input_boolean
+    refresh_interval:
+      name: Refresh Interval (minutes)
+      description: How often to reapply the All-day scene.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: minutes
+
+trigger:
+  - platform: time_pattern
+    minutes: "/{{ refresh_interval }}"
+  - platform: state
+    entity_id: !input physical_switch
+    to: "on"
+  - platform: state
+    entity_id: !input hue_light
+    to: "on"
+
+condition:
+  - condition: state
+    entity_id: !input physical_switch
+    state: "on"
+  - condition: state
+    entity_id: !input hue_light
+    state: "on"
+  - condition: state
+    entity_id: !input override_helper
+    state: "off"
+
+action:
+  - service: scene.turn_on
+    target:
+      entity_id: !input all_day_scene
+
+mode: restart

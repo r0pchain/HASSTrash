@@ -2,7 +2,7 @@ blueprint:
   name: Hue All-Day Scene with Manual Override
   description: >
     Automate Philips Hue scene changes based on time of day, only if the physical switch and Hue light are ON.
-    Supports pausing automation when manual control is detected.
+    Pauses automation when manual control is detected for a set timeout.
   domain: automation
   input:
     physical_switch:
@@ -17,6 +17,12 @@ blueprint:
       selector:
         entity:
           domain: light
+    override_helper:
+      name: Override Helper
+      description: The input_boolean that tracks manual overrides.
+      selector:
+        entity:
+          domain: input_boolean
     morning_scene:
       name: Morning Scene
       selector:
@@ -73,7 +79,7 @@ condition:
     entity_id: !input hue_light
     state: "on"
   - condition: state
-    entity_id: "input_boolean.override_{{ hue_light.split('.')[-1] }}"
+    entity_id: !input override_helper
     state: "off"
 
 action:

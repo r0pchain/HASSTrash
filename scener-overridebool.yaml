@@ -1,8 +1,9 @@
 blueprint:
-  name: Hue Manual Override Detector
+  name: Hue Manual Override Detector (Updated)
   description: >
-    Detects manual changes to a Hue light (brightness, color, etc.) and sets
-    an override flag for a configurable timeout to pause other automations.
+    Detects manual changes to a Hue light (brightness, color, etc.) and sets an override flag
+    for a configurable timeout to pause other automations. Ignores automation/scene-driven changes
+    and prevents restarting the delay if already active.
   domain: automation
   input:
     hue_light:
@@ -35,18 +36,29 @@ trigger:
 condition:
   - condition: template
     value_template: >
-      {{ trigger.to_state.attributes.brightness != trigger.from_state.attributes.brightness
-         or trigger.to_state.attributes.color_temp != trigger.from_state.attributes.color_temp
-         or trigger.to_state.attributes.rgb_color != trigger.from_state.attributes.rgb_color }}
+      {{
+        (
+          trigger.to_state.attributes.brightness != trigger.from_state.attributes.brightness
+          or trigger.to_state.attributes.color_temp != trigger.from_state.attributes.color_temp
+          or trigger.to_state.attributes.rgb_color != trigger.from_state.attributes.rgb_color
+        )
+        and not trigger.to_state.context.parent_id
+      }}
 
 action:
-  - service: input_boolean.turn_on
-    target:
-      entity_id: !input override_helper
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input override_helper
+            state: "off"
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input override_helper
   - delay:
       minutes: !input override_timeout
   - service: input_boolean.turn_off
     target:
       entity_id: !input override_helper
 
-mode: restart
+mode: parallel

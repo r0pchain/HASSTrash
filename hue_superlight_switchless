@@ -1,63 +1,47 @@
 blueprint:
-  name: Hue Manual Override Detector (With Idempotency & Context Check)
+  name: Hue All-Day Scene Refresh (No Switch)
   description: >
-    Detects manual changes to a Hue light (brightness, color, etc.) and sets an override flag
-    for a configurable timeout to pause other automations. Ignores automation/scene-driven changes.
+    Periodically refresh a Philips Hue "All-day scene" and on state changes.
+    Only runs if the Hue light is ON and no manual override is active.
   domain: automation
   input:
     hue_light:
       name: Hue Light
-      description: The Hue lamp or group to monitor for manual changes.
+      description: The Hue lamp or group to control.
       selector:
         entity:
           domain: light
+    all_day_scene:
+      name: Hue All-Day Scene
+      description: The Hue "All-day scene" to refresh.
+      selector:
+        entity:
+          domain: scene
     override_helper:
       name: Override Helper
-      description: The input_boolean helper to set when override is active.
+      description: input_boolean helper to suppress scene refresh during manual overrides.
       selector:
         entity:
           domain: input_boolean
-    override_timeout:
-      name: Override Timeout (minutes)
-      description: How long to keep override active after manual change.
-      default: 30
-      selector:
-        number:
-          min: 5
-          max: 240
-          step: 5
-          unit_of_measurement: minutes
 
 trigger:
+  - platform: time_pattern
+    minutes: "/10"  # Fixed refresh interval (every 10 minutes)
   - platform: state
     entity_id: !input hue_light
+    to: "on"
 
 condition:
-  - condition: template
-    value_template: >
-      {{
-        (
-          trigger.to_state.attributes.brightness != trigger.from_state.attributes.brightness
-          or trigger.to_state.attributes.color_temp != trigger.from_state.attributes.color_temp
-          or trigger.to_state.attributes.rgb_color != trigger.from_state.attributes.rgb_color
-        )
-        and not trigger.to_state.context.parent_id
-      }}
+  - condition: state
+    entity_id: !input hue_light
+    state: "on"
+  - condition: state
+    entity_id: !input override_helper
+    state: "off"
 
 action:
-  - choose:
-      - conditions:
-          - condition: state
-            entity_id: !input override_helper
-            state: "off"
-        sequence:
-          - service: input_boolean.turn_on
-            target:
-              entity_id: !input override_helper
-  - delay:
-      minutes: !input override_timeout
-  - service: input_boolean.turn_off
+  - service: scene.turn_on
     target:
-      entity_id: !input override_helper
+      entity_id: !input all_day_scene
 
-mode: parallel
+mode: restart

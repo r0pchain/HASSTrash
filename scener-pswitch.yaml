@@ -1,7 +1,7 @@
 blueprint:
   name: Hue All-Day Scene with Manual Override
   description: >
-    Automate Philips Hue scene changes based on time of day, only if the physical switch and Hue light are ON. 
+    Automate Philips Hue scene changes based on time of day, only if the physical switch and Hue light are ON.
     Supports pausing automation when manual control is detected.
   domain: automation
   input:
@@ -17,11 +17,31 @@ blueprint:
       selector:
         entity:
           domain: light
-    time_blocks:
-      name: Time Blocks
-      description: Map time ranges to Hue scenes.
+    morning_scene:
+      name: Morning Scene
       selector:
-        object:
+        entity:
+          domain: scene
+    day_scene:
+      name: Day Scene
+      selector:
+        entity:
+          domain: scene
+    evening_scene:
+      name: Evening Scene
+      selector:
+        entity:
+          domain: scene
+    night_scene:
+      name: Night Scene
+      selector:
+        entity:
+          domain: scene
+    late_night_scene:
+      name: Late Night Scene
+      selector:
+        entity:
+          domain: scene
     override_timeout:
       name: Override Timeout (minutes)
       description: How long to pause schedule after manual control.
@@ -32,13 +52,6 @@ blueprint:
           max: 240
           step: 5
           unit_of_measurement: minutes
-
-variables:
-  switch_entity: !input physical_switch
-  light_entity: !input hue_light
-  time_blocks: !input time_blocks
-  override_timeout: !input override_timeout
-  override_helper: "input_boolean.override_{{ hue_light.split('.')[-1] }}"
 
 trigger:
   - platform: time_pattern
@@ -60,44 +73,49 @@ condition:
     entity_id: !input hue_light
     state: "on"
   - condition: state
-    entity_id: "{{ override_helper }}"
+    entity_id: "input_boolean.override_{{ hue_light.split('.')[-1] }}"
     state: "off"
 
 action:
   - choose:
-      {% for block in time_blocks %}
       - conditions:
           - condition: time
-            after: "{{ block.start }}"
-            before: "{{ block.end }}"
+            after: "06:00:00"
+            before: "08:00:00"
         sequence:
           - service: scene.turn_on
             target:
-              entity_id: "{{ block.scene }}"
-      {% endfor %}
-
+              entity_id: !input morning_scene
+      - conditions:
+          - condition: time
+            after: "08:00:00"
+            before: "20:57:00"
+        sequence:
+          - service: scene.turn_on
+            target:
+              entity_id: !input day_scene
+      - conditions:
+          - condition: time
+            after: "20:57:00"
+            before: "22:00:00"
+        sequence:
+          - service: scene.turn_on
+            target:
+              entity_id: !input evening_scene
+      - conditions:
+          - condition: time
+            after: "22:00:00"
+            before: "00:00:00"
+        sequence:
+          - service: scene.turn_on
+            target:
+              entity_id: !input night_scene
+      - conditions:
+          - condition: time
+            after: "00:00:00"
+            before: "06:00:00"
+        sequence:
+          - service: scene.turn_on
+            target:
+              entity_id: !input late_night_scene
 mode: restart
-
----
-
-# Secondary automation for manual override detection
-automation:
-  - alias: "Detect Manual Override for {{ hue_light }}"
-    trigger:
-      - platform: state
-        entity_id: !input hue_light
-    condition:
-      - condition: template
-        value_template: >
-          {{ trigger.to_state.attributes.brightness != trigger.from_state.attributes.brightness or
-             trigger.to_state.attributes.color_temp != trigger.from_state.attributes.color_temp or
-             trigger.to_state.attributes.rgb_color != trigger.from_state.attributes.rgb_color }}
-    action:
-      - service: input_boolean.turn_on
-        target:
-          entity_id: "{{ override_helper }}"
-      - delay:
-          minutes: "{{ override_timeout }}"
-      - service: input_boolean.turn_off
-        target:
-          entity_id: "{{ override_helper }}"

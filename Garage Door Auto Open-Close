@@ -1,0 +1,82 @@
+blueprint:
+  name: Garage Door Auto Open/Close
+  description: >
+    Opens or closes a garage door when the selected person arrives or leaves
+    a zone, but only if a specified device characteristic (e.g., Android Auto)
+    is active.
+  domain: automation
+  input:
+    person_entity:
+      name: Person
+      description: Person entity to monitor for arrival/departure
+      selector:
+        entity:
+          domain: person
+    garage_cover:
+      name: Garage Door
+      description: Garage door (cover) entity to open or close
+      selector:
+        entity:
+          domain: cover
+    device_sensor:
+      name: Device Characteristic
+      description: Binary sensor or device tracker that must be "on" to allow triggering (e.g., Android Auto connected)
+      selector:
+        entity:
+          domain: binary_sensor
+    zone_entity:
+      name: Zone
+      description: Zone to monitor for arrival/departure
+      default: zone.home
+      selector:
+        entity:
+          domain: zone
+    delay_time:
+      name: Arrival/Departure Delay
+      description: Delay after arrival/departure before triggering (optional)
+      default: "00:00:30"
+      selector:
+        duration: {}
+
+trigger:
+  - platform: state
+    entity_id: !input person_entity
+    from: not_home
+    to: home
+    id: arrive
+    for: !input delay_time
+  - platform: state
+    entity_id: !input person_entity
+    from: home
+    to: not_home
+    id: leave
+    for: !input delay_time
+
+condition:
+  - condition: state
+    entity_id: !input device_sensor
+    state: "on"
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: arrive
+          - condition: state
+            entity_id: !input garage_cover
+            state: "closed"
+        sequence:
+          - service: cover.open_cover
+            target:
+              entity_id: !input garage_cover
+      - conditions:
+          - condition: trigger
+            id: leave
+          - condition: state
+            entity_id: !input garage_cover
+            state: "open"
+        sequence:
+          - service: cover.close_cover
+            target:
+              entity_id: !input garage_cover
+mode: single
